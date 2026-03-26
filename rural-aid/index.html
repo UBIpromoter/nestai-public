@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   #map { width: 100%; height: 100vh; }
   .legend {
     background: rgba(255,255,255,0.95);
@@ -32,35 +32,52 @@
   }
   .title-bar h1 { font-size: 20px; font-weight: 600; color: #fff; letter-spacing: 0.3px; }
   .title-bar p { font-size: 13px; color: #aaa; margin-top: 2px; }
+
+  /* District town labels — rendered above pins */
   .town-label {
-    background: none; border: none; box-shadow: none;
-    font-size: 11px; font-weight: 600; color: #333;
-    text-shadow: 1px 1px 2px rgba(255,255,255,0.9), -1px -1px 2px rgba(255,255,255,0.9),
-                 0 1px 2px rgba(255,255,255,0.9), 0 -1px 2px rgba(255,255,255,0.9);
+    background: none !important; border: none !important; box-shadow: none !important;
+    font-size: 12px; font-weight: 700; color: #222;
+    text-shadow:
+      -1px -1px 0 rgba(255,255,255,0.95),
+       1px -1px 0 rgba(255,255,255,0.95),
+      -1px  1px 0 rgba(255,255,255,0.95),
+       1px  1px 0 rgba(255,255,255,0.95),
+       0   -2px 3px rgba(255,255,255,0.8),
+       0    2px 3px rgba(255,255,255,0.8);
     white-space: nowrap; text-align: center;
-    position: relative; z-index: 800 !important;
+    pointer-events: none;
   }
+  /* Other MA town labels */
   .town-label-other {
-    background: none; border: none; box-shadow: none;
-    font-size: 9px; font-weight: 400; color: #888;
-    text-shadow: 1px 1px 1px rgba(255,255,255,0.7), -1px -1px 1px rgba(255,255,255,0.7);
+    background: none !important; border: none !important; box-shadow: none !important;
+    font-size: 9px; font-weight: 400; color: #999;
+    text-shadow: 1px 1px 1px #fff, -1px -1px 1px #fff;
     white-space: nowrap; text-align: center;
+    pointer-events: none;
+  }
+  /* Reference city labels */
+  .city-label {
+    background: none !important; border: none !important; box-shadow: none !important;
+    font-size: 11px; font-weight: 600; color: #666;
+    text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 0 0 4px #fff;
+    white-space: nowrap; text-align: center;
+    pointer-events: none;
   }
   .leaflet-control-attribution { display: none !important; }
 
-  /* View toggle tabs */
+  /* View toggle — inline at bottom of zoom presets */
   .view-toggle {
-    position: absolute; top: 65px; right: 14px; z-index: 1000;
-    display: flex; gap: 0; border-radius: 6px; overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    display: flex; gap: 0;
+    border-top: 1px solid #ddd;
   }
   .view-btn {
-    padding: 7px 14px; border: none; cursor: pointer;
-    font-size: 13px; font-weight: 500; font-family: inherit;
+    padding: 5px 0; border: none; cursor: pointer;
+    font-size: 10px; font-weight: 500; font-family: inherit;
     background: rgba(255,255,255,0.85); color: #555;
     transition: background 0.15s, color 0.15s;
+    flex: 1; text-align: center;
   }
-  .view-btn:first-child { border-right: 1px solid #ddd; }
+  .view-btn:not(:last-child) { border-right: 1px solid #ddd; }
   .view-btn.active { background: #2563eb; color: #fff; }
   .view-btn:hover:not(.active) { background: rgba(255,255,255,1); color: #333; }
 
@@ -71,14 +88,30 @@
     font-size: 14px; font-weight: 600; font-family: inherit;
     background: #2563eb; color: #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    letter-spacing: 0.3px;
     pointer-events: auto;
   }
   .print-btn:hover { background: #1d4ed8; }
 
+  /* Zoom presets */
+  .zoom-presets {
+    position: absolute; top: 65px; left: 14px; z-index: 1000;
+    display: flex; flex-direction: column; gap: 0; border-radius: 6px; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .zoom-btn {
+    padding: 7px 14px; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 500; font-family: inherit;
+    background: rgba(255,255,255,0.85); color: #555;
+    transition: background 0.15s, color 0.15s;
+    text-align: left; white-space: nowrap;
+  }
+  .zoom-btn:not(:last-child) { border-bottom: 1px solid #ddd; }
+  .zoom-btn.active { background: #2563eb; color: #fff; }
+  .zoom-btn:hover:not(.active) { background: rgba(255,255,255,1); color: #333; }
+
   @media print {
     .title-bar { position: relative; background: #1a1a2e; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .leaflet-control-zoom, .view-toggle, .print-btn { display: none !important; }
+    .leaflet-control-zoom, .view-toggle, .print-btn, .zoom-presets { display: none !important; }
     #map { height: 90vh; }
     .legend { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
@@ -87,13 +120,19 @@
 <body>
 
 <div class="title-bar">
-  <h1>Mohawk Trail & Frontier Regional School Districts</h1>
+  <h1>Mohawk Trail &amp; Frontier Regional School Districts</h1>
   <p>Western Massachusetts &mdash; 12 Towns, 2 Districts</p>
 </div>
 
-<div class="view-toggle">
-  <button class="view-btn" id="btn-detailed" onclick="setView('detailed')">Detailed</button>
-  <button class="view-btn active" id="btn-clean" onclick="setView('clean')">Clean</button>
+<div class="zoom-presets">
+  <button class="zoom-btn active" id="zp-local" onclick="zoomPreset('local')">Local</button>
+  <button class="zoom-btn" id="zp-valley" onclick="zoomPreset('valley')">Valley</button>
+  <button class="zoom-btn" id="zp-western" onclick="zoomPreset('western')">Western MA</button>
+  <button class="zoom-btn" id="zp-state" onclick="zoomPreset('state')">State</button>
+  <div class="view-toggle">
+    <button class="view-btn" id="btn-detailed" onclick="setView('detailed')">Detailed</button>
+    <button class="view-btn active" id="btn-clean" onclick="setView('clean')">Clean</button>
+  </div>
 </div>
 
 <button class="print-btn" onclick="window.print()">Print Map</button>
@@ -101,15 +140,15 @@
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
 <script>
 const map = L.map('map', {
   zoomControl: true,
   attributionControl: false
 }).setView([42.55, -72.75], 10);
 
-// Two tile layers
+// Tile layers
 const detailedTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
-const cleanTiles = L.tileLayer('', { maxZoom: 19 });
 
 let currentView = 'clean';
 document.getElementById('map').style.background = '#ffffff';
@@ -132,181 +171,140 @@ const schools = [
   { name: 'Frontier Regional School', lat: 42.4773, lng: -72.6075, district: 'Frontier Regional', address: '113 North Main St, South Deerfield' }
 ];
 
+// Manual label position overrides
+const labelNudges = {
+  'Sunderland': [0.008, 0],
+  'Whately': [-0.005, 0],
+  'Deerfield': [0.005, 0],
+};
+
+// County FIPS codes
+const COUNTY_VALLEY = new Set(['011', '015', '013']); // Franklin, Hampshire, Hampden
+const COUNTY_WESTERN = new Set(['011', '015', '013', '003', '027']); // + Berkshire, Worcester
+let currentPreset = 'local';
+
+// Reference cities — ~10 across the state for geographic context
+const referenceCities = [
+
+  { name: 'Northampton', lat: 42.3251, lng: -72.6412, showAt: ['valley','western','state'] },
+  { name: 'Springfield', lat: 42.1015, lng: -72.5898, showAt: ['valley','western','state'] },
+  { name: 'Pittsfield', lat: 42.4501, lng: -73.2526, showAt: ['western','state'] },
+  { name: 'Amherst', lat: 42.3732, lng: -72.5199, showAt: ['valley'] },
+  { name: 'Worcester', lat: 42.2626, lng: -71.8023, showAt: ['state'] },
+  { name: 'Boston', lat: 42.3601, lng: -71.0589, showAt: ['state'] },
+  { name: 'Holyoke', lat: 42.2043, lng: -72.6162, showAt: ['valley'] },
+  { name: 'North Adams', lat: 42.7009, lng: -73.1087, showAt: ['western','state'] },
+];
+
 // Layers
 const otherTownLabels = L.layerGroup();
 const districtTownLabels = L.layerGroup().addTo(map);
+const cityLabelsGroup = L.layerGroup();
+// County borders removed — just town lines everywhere
 
-// Store references for view toggling
 let maskLayer, maTownsLayer, districtLayer;
-const TOWN_WEIGHT_DETAILED = 0.5;
-const TOWN_WEIGHT_CLEAN = 1.5;
-const DISTRICT_WEIGHT_DETAILED = 2.5;
-const DISTRICT_WEIGHT_CLEAN = 3.5;
-const MASK_WEIGHT_DETAILED = 2;
-const MASK_WEIGHT_CLEAN = 3;
+let allOtherLabels = [];
+let cityMarkers = [];
 
-// Polylabel — find the visual center (pole of inaccessibility) of a polygon
-// Simplified version that works well for map labels
-function polylabel(polygon, precision) {
-  precision = precision || 0.001;
-
-  // Find bounding box
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const outerRing = polygon[0];
-  for (const p of outerRing) {
-    if (p[0] < minX) minX = p[0];
-    if (p[1] < minY) minY = p[1];
-    if (p[0] > maxX) maxX = p[0];
-    if (p[1] > maxY) maxY = p[1];
+// Use Turf.js for proper label placement
+function getLabelPoint(feature) {
+  try {
+    const poly = feature.geometry.type === 'MultiPolygon'
+      ? turf.polygon(feature.geometry.coordinates[0])
+      : turf.polygon(feature.geometry.coordinates);
+    const pt = turf.pointOnFeature(poly);
+    return [pt.geometry.coordinates[1], pt.geometry.coordinates[0]];
+  } catch(e) {
+    const centroid = turf.centroid(feature);
+    return [centroid.geometry.coordinates[1], centroid.geometry.coordinates[0]];
   }
-
-  const width = maxX - minX;
-  const height = maxY - minY;
-  const cellSize = Math.max(width, height);
-
-  if (cellSize === 0) return [(minX + maxX) / 2, (minY + maxY) / 2];
-
-  // Use grid sampling to find the point inside the polygon farthest from edges
-  let bestX = (minX + maxX) / 2;
-  let bestY = (minY + maxY) / 2;
-  let bestDist = -Infinity;
-
-  // Sample on a grid
-  const step = cellSize / 20;
-  for (let x = minX; x <= maxX; x += step) {
-    for (let y = minY; y <= maxY; y += step) {
-      if (pointInPolygon(x, y, polygon)) {
-        const dist = distToPolygonEdge(x, y, polygon);
-        if (dist > bestDist) {
-          bestDist = dist;
-          bestX = x;
-          bestY = y;
-        }
-      }
-    }
-  }
-
-  // Refine around best point
-  const refineStep = step / 4;
-  for (let x = bestX - step; x <= bestX + step; x += refineStep) {
-    for (let y = bestY - step; y <= bestY + step; y += refineStep) {
-      if (pointInPolygon(x, y, polygon)) {
-        const dist = distToPolygonEdge(x, y, polygon);
-        if (dist > bestDist) {
-          bestDist = dist;
-          bestX = x;
-          bestY = y;
-        }
-      }
-    }
-  }
-
-  return [bestX, bestY];
 }
 
-function pointInPolygon(x, y, polygon) {
-  const ring = polygon[0];
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
+// Create reference city markers
+referenceCities.forEach(city => {
+  // Small circle marker
+  const dot = L.circleMarker([city.lat, city.lng], {
+    radius: 3, fillColor: '#666', fillOpacity: 0.7,
+    color: '#555', weight: 1, interactive: false
+  });
+  // Label
+  const labelAnchor = city.labelOffset ? [50 - city.labelOffset[0], -4 - city.labelOffset[1]] : [50, -4];
+  const label = L.marker([city.lat, city.lng], {
+    icon: L.divIcon({
+      className: 'city-label',
+      html: city.name,
+      iconSize: [100, 18],
+      iconAnchor: labelAnchor
+    }),
+    interactive: false
+  });
+  const group = L.layerGroup([dot, label]);
+  group._cityData = city;
+  cityMarkers.push(group);
+});
 
-function distToPolygonEdge(x, y, polygon) {
-  let minDist = Infinity;
-  for (const ring of polygon) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const d = distToSegment(x, y, ring[j][0], ring[j][1], ring[i][0], ring[i][1]);
-      if (d < minDist) minDist = d;
-    }
-  }
-  return minDist;
-}
-
-function distToSegment(px, py, ax, ay, bx, by) {
-  const dx = bx - ax, dy = by - ay;
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return Math.sqrt((px - ax) * (px - ax) + (py - ay) * (py - ay));
-  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  const cx = ax + t * dx, cy = ay + t * dy;
-  return Math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
-}
-
-// Get visual center for any GeoJSON feature
-function getVisualCenter(feature) {
-  const geom = feature.geometry;
-  if (geom.type === 'Polygon') {
-    const center = polylabel(geom.coordinates);
-    return [center[1], center[0]]; // [lat, lng]
-  } else if (geom.type === 'MultiPolygon') {
-    // Use the largest polygon
-    let largest = geom.coordinates[0];
-    let largestArea = 0;
-    for (const poly of geom.coordinates) {
-      const a = ringArea(poly[0]);
-      if (a > largestArea) { largestArea = a; largest = poly; }
-    }
-    const center = polylabel(largest);
-    return [center[1], center[0]];
-  }
-  return null;
-}
-
-function ringArea(ring) {
-  let area = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    area += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
-  }
-  return Math.abs(area / 2);
-}
-
-// Load all data
+// Load data
 Promise.all([
   fetch('districts.geojson').then(r => r.json()),
   fetch('ma-towns.geojson').then(r => r.json()),
   fetch('ma-mask.geojson').then(r => r.json())
 ]).then(([districts, maTowns, maMask]) => {
 
-  // 1. White mask hides everything outside Massachusetts
+  // 1. Mask — hides everything outside MA
   maskLayer = L.geoJSON(maMask, {
-    style: { fillColor: '#ffffff', fillOpacity: 1, color: '#666', weight: MASK_WEIGHT_DETAILED, opacity: 0.8 }
+    style: { fillColor: '#ffffff', fillOpacity: 1, color: '#999', weight: 1.5, opacity: 0.8 },
+    interactive: false
   }).addTo(map);
 
   // 2. All MA town boundaries
-  const otherLabelData = [];
   maTownsLayer = L.geoJSON(maTowns, {
     style: feature => {
       const name = feature.properties.NAME || '';
       if (districtTowns.has(name)) {
-        return { fillColor: 'transparent', fillOpacity: 0, color: '#ccc', weight: TOWN_WEIGHT_DETAILED };
+        return { fillColor: 'transparent', fillOpacity: 0, color: '#999', weight: 1.5 };
       }
-      return { fillColor: '#f5f5f5', fillOpacity: 0.4, color: '#ccc', weight: TOWN_WEIGHT_DETAILED };
+      return { fillColor: '#f5f5f5', fillOpacity: 0.3, color: '#999', weight: 1.5 };
     },
     onEachFeature: (feature, layer) => {
       const name = feature.properties.NAME || '';
+      const countyFips = feature.properties.COUNTYFP || '';
       if (!districtTowns.has(name) && name) {
-        const center = getVisualCenter(feature);
+        // Strip " Town", " city" suffixes
+        let displayName = name.replace(/ Town$/i, '').replace(/ city$/i, '');
+        // Skip if a reference city exists at this location (avoid double labels)
+        const isRefCity = referenceCities.some(c => c.name.toLowerCase() === displayName.toLowerCase());
+        if (isRefCity) return;
+        // Manual overrides for towns with bad polylabel placement
+        const otherTownNudges = {
+          'New Salem': [0.01, 0.02],  // push south and east toward center
+        };
+        let center = getLabelPoint(feature);
+        const otherNudge = otherTownNudges[displayName];
+        if (otherNudge && center) {
+          center = [center[0] - otherNudge[0], center[1] + otherNudge[1]];
+        }
         if (center) {
-          otherLabelData.push({ name, lat: center[0], lng: center[1] });
+          const marker = L.marker(center, {
+            icon: L.divIcon({
+              className: 'town-label-other',
+              html: displayName,
+              iconSize: [80, 16],
+              iconAnchor: [40, 8]
+            }),
+            interactive: false
+          });
+          marker._countyFips = countyFips;
+          marker._townName = displayName;
+          allOtherLabels.push(marker);
+          marker.addTo(otherTownLabels);
         }
       }
     }
   }).addTo(map);
 
-  // Add other town labels (no collision avoidance for these — too many, shown only at high zoom)
-  otherLabelData.forEach(item => {
-    L.marker([item.lat, item.lng], {
-      icon: L.divIcon({ className: 'town-label-other', html: item.name, iconSize: [80, 16], iconAnchor: [40, 8] })
-    }).addTo(otherTownLabels);
-  });
+  // County borders removed — just clean town lines
 
-  // 3. District town polygons — colored, on top
+  // 3. District polygons — colored
   districtLayer = L.geoJSON(districts, {
     style: feature => {
       const isMohawk = feature.properties.district === 'mohawk';
@@ -314,7 +312,7 @@ Promise.all([
         fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
         fillOpacity: 0.35,
         color: isMohawk ? MOHAWK_COLOR : FRONTIER_COLOR,
-        weight: DISTRICT_WEIGHT_DETAILED,
+        weight: 3.5,
         opacity: 0.9
       };
     },
@@ -325,40 +323,39 @@ Promise.all([
     }
   }).addTo(map);
 
-  // 4. District town name labels — using polylabel visual center + collision avoidance
-  const districtLabelData = [];
+  // 4. District town labels — using Turf.js + manual nudges
   districts.features.forEach(feature => {
-    const center = getVisualCenter(feature);
-    if (center) {
-      districtLabelData.push({
-        name: feature.properties.census_name,
-        lat: center[0],
-        lng: center[1]
-      });
+    const name = feature.properties.census_name;
+    let center = getLabelPoint(feature);
+    if (!center) return;
+
+    const nudge = labelNudges[name];
+    if (nudge) {
+      center = [center[0] + nudge[0], center[1] + nudge[1]];
     }
-  });
 
-  // Manual nudge for Sunderland — it sits too close to Whately
-  districtLabelData.forEach(item => {
-    if (item.name === 'Sunderland') item.lat += 0.012;
-  });
-
-  districtLabelData.forEach(item => {
-    L.marker([item.lat, item.lng], {
-      icon: L.divIcon({ className: 'town-label', html: item.name, iconSize: [90, 16], iconAnchor: [45, 8] }),
-      zIndexOffset: 500
+    L.marker(center, {
+      icon: L.divIcon({
+        className: 'town-label',
+        html: name,
+        iconSize: [100, 20],
+        iconAnchor: [50, 10]
+      }),
+      zIndexOffset: 1000,
+      interactive: false
     }).addTo(districtTownLabels);
   });
 
-  // Fit to districts with padding
-  map.fitBounds(districtLayer.getBounds().pad(0.15));
-  map.panBy([0, -30]);
+  // Fit view
+  map.fitBounds(districtLayer.getBounds().pad(0.15), {animate: false});
+  map.panBy([0, -30], {animate: false});
 
-  // Default to clean view
+  // Apply clean view
   setView('clean');
+  updateCities();
 });
 
-// School pins — simple colored pins, no labels, lower z-index than text
+// School pins
 schools.forEach(school => {
   const color = school.district === 'Mohawk Trail' ? MOHAWK_COLOR : FRONTIER_COLOR;
   const pinIcon = L.divIcon({
@@ -377,24 +374,47 @@ schools.forEach(school => {
     .bindPopup(`<strong>${school.name}</strong><br>${school.address}`);
 });
 
-// Zoom-dependent label visibility
+// Zoom-dependent labels with dynamic sizing
 function updateLabels() {
   const zoom = map.getZoom();
-  // Other MA towns: only at high zoom
-  if (zoom >= 11) {
+
+  if (zoom >= 10) {
     if (!map.hasLayer(otherTownLabels)) map.addLayer(otherTownLabels);
   } else {
     if (map.hasLayer(otherTownLabels)) map.removeLayer(otherTownLabels);
   }
-  // District town names: show at medium zoom and above
+
   if (zoom >= 9) {
     if (!map.hasLayer(districtTownLabels)) map.addLayer(districtTownLabels);
   } else {
     if (map.hasLayer(districtTownLabels)) map.removeLayer(districtTownLabels);
   }
+
+  const labelSize = zoom <= 9 ? 9 : zoom === 10 ? 10 : 12;
+  document.querySelectorAll('.town-label').forEach(el => {
+    el.style.fontSize = labelSize + 'px';
+  });
+
+  const otherSize = zoom <= 10 ? 7 : 9;
+  document.querySelectorAll('.town-label-other').forEach(el => {
+    el.style.fontSize = otherSize + 'px';
+  });
 }
-map.on('zoomend', updateLabels);
+map.on('zoomend', () => { updateLabels(); updateTownVisibility(); updateCities(); });
 updateLabels();
+
+// Update reference cities visibility based on current preset
+function updateCities() {
+  cityMarkers.forEach(group => {
+    const city = group._cityData;
+    const shouldShow = city.showAt.includes(currentPreset);
+    if (shouldShow) {
+      if (!map.hasLayer(group)) group.addTo(map);
+    } else {
+      if (map.hasLayer(group)) map.removeLayer(group);
+    }
+  });
+}
 
 // View toggle
 function setView(mode) {
@@ -402,52 +422,108 @@ function setView(mode) {
   document.getElementById('btn-detailed').classList.toggle('active', mode === 'detailed');
   document.getElementById('btn-clean').classList.toggle('active', mode === 'clean');
 
+  if (map.hasLayer(detailedTiles)) map.removeLayer(detailedTiles);
+
   if (mode === 'clean') {
-    map.removeLayer(detailedTiles);
     document.getElementById('map').style.background = '#ffffff';
-    if (maTownsLayer) maTownsLayer.setStyle(feature => {
-      const name = (feature.properties.NAME || feature.properties.massgis_name || '');
-      if (districtTowns.has(name)) {
-        return { fillColor: 'transparent', fillOpacity: 0, color: '#999', weight: TOWN_WEIGHT_CLEAN };
-      }
-      return { fillColor: '#f5f5f5', fillOpacity: 0.3, color: '#999', weight: TOWN_WEIGHT_CLEAN };
+    if (maTownsLayer) maTownsLayer.setStyle(f => {
+      const name = f.properties.NAME || f.properties.massgis_name || '';
+      return districtTowns.has(name)
+        ? { fillColor: 'transparent', fillOpacity: 0, color: '#999', weight: 1.5 }
+        : { fillColor: '#f5f5f5', fillOpacity: 0.3, color: '#999', weight: 1.5 };
     });
-    if (districtLayer) districtLayer.setStyle(feature => {
-      const isMohawk = feature.properties.district === 'mohawk';
-      return {
-        fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
-        fillOpacity: 0.35,
-        color: isMohawk ? MOHAWK_COLOR : FRONTIER_COLOR,
-        weight: DISTRICT_WEIGHT_CLEAN,
-        opacity: 0.9
-      };
+    if (districtLayer) districtLayer.setStyle(f => {
+      const m = f.properties.district === 'mohawk';
+      return { fillColor: m ? MOHAWK_FILL : FRONTIER_FILL, fillOpacity: 0.35, color: m ? MOHAWK_COLOR : FRONTIER_COLOR, weight: 3.5, opacity: 0.9 };
     });
-    if (maskLayer) maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: '#333', weight: MASK_WEIGHT_CLEAN, opacity: 1 });
+    if (maskLayer) maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: '#999', weight: 1.5, opacity: 0.8 });
   } else {
-    if (!map.hasLayer(detailedTiles)) detailedTiles.addTo(map);
+    detailedTiles.addTo(map);
     document.getElementById('map').style.background = '';
-    if (maTownsLayer) maTownsLayer.setStyle(feature => {
-      const name = (feature.properties.NAME || feature.properties.massgis_name || '');
-      if (districtTowns.has(name)) {
-        return { fillColor: 'transparent', fillOpacity: 0, color: '#ccc', weight: TOWN_WEIGHT_DETAILED };
-      }
-      return { fillColor: '#f5f5f5', fillOpacity: 0.4, color: '#ccc', weight: TOWN_WEIGHT_DETAILED };
+    if (maTownsLayer) maTownsLayer.setStyle(f => {
+      const name = f.properties.NAME || f.properties.massgis_name || '';
+      return districtTowns.has(name)
+        ? { fillColor: 'transparent', fillOpacity: 0, color: '#ccc', weight: 0.5 }
+        : { fillColor: '#f5f5f5', fillOpacity: 0.4, color: '#ccc', weight: 0.5 };
     });
-    if (districtLayer) districtLayer.setStyle(feature => {
-      const isMohawk = feature.properties.district === 'mohawk';
-      return {
-        fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
-        fillOpacity: 0.35,
-        color: isMohawk ? MOHAWK_COLOR : FRONTIER_COLOR,
-        weight: DISTRICT_WEIGHT_DETAILED,
-        opacity: 0.9
-      };
+    if (districtLayer) districtLayer.setStyle(f => {
+      const m = f.properties.district === 'mohawk';
+      return { fillColor: m ? MOHAWK_FILL : FRONTIER_FILL, fillOpacity: 0.35, color: m ? MOHAWK_COLOR : FRONTIER_COLOR, weight: 2.5, opacity: 0.9 };
     });
-    if (maskLayer) maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: '#666', weight: MASK_WEIGHT_DETAILED, opacity: 0.8 });
+    if (maskLayer) maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: '#999', weight: 1.5, opacity: 0.8 });
   }
 }
 
-// Legend — just districts
+// Zoom presets
+function zoomPreset(preset) {
+  currentPreset = preset;
+  ['local','valley','western','state'].forEach(p => {
+    document.getElementById('zp-' + p).classList.toggle('active', p === preset);
+  });
+
+  if (preset === 'local') {
+    map.fitBounds(districtLayer.getBounds().pad(0.15), {animate: false});
+  } else if (preset === 'valley') {
+    map.setView([42.25, -72.65], 9, {animate: false});
+  } else if (preset === 'western') {
+    map.setView([42.3, -72.5], 8, {animate: false});
+  } else if (preset === 'state') {
+    map.setView([42.2, -71.8], 8, {animate: false});
+  }
+
+  // Hide state outline and non-relevant towns at valley/local zoom
+  if (maskLayer) {
+    if (preset === 'valley' || preset === 'local') {
+      maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: 'transparent', weight: 0, opacity: 0 });
+    } else {
+      maskLayer.setStyle({ fillColor: '#ffffff', fillOpacity: 1, color: '#999', weight: 1.5, opacity: 0.8 });
+    }
+  }
+
+  updateTownVisibility();
+  updateCities();
+}
+
+function updateTownVisibility() {
+  if (!maTownsLayer) return;
+
+  maTownsLayer.eachLayer(layer => {
+    const feat = layer.feature;
+    if (!feat) return;
+    const name = feat.properties.NAME || '';
+    if (districtTowns.has(name)) return;
+
+    const countyFips = feat.properties.COUNTYFP || '';
+    let visible = false;
+
+    if (currentPreset === 'state') visible = true;
+    else if (currentPreset === 'western') visible = COUNTY_WESTERN.has(countyFips);
+    else if (currentPreset === 'valley') visible = COUNTY_VALLEY.has(countyFips);
+    else visible = true;
+
+    if (visible) {
+      layer.setStyle({ fillColor: '#f5f5f5', fillOpacity: 0.3, color: '#999', weight: 1.5, opacity: 1 });
+    } else {
+      layer.setStyle({ fillColor: 'transparent', fillOpacity: 0, color: 'transparent', weight: 0, opacity: 0 });
+    }
+  });
+
+  allOtherLabels.forEach(marker => {
+    let visible = false;
+    if (currentPreset === 'state') visible = true;
+    else if (currentPreset === 'western') visible = COUNTY_WESTERN.has(marker._countyFips);
+    else if (currentPreset === 'valley') visible = COUNTY_VALLEY.has(marker._countyFips);
+    else visible = true;
+
+    if (visible) {
+      if (!otherTownLabels.hasLayer(marker)) otherTownLabels.addLayer(marker);
+    } else {
+      if (otherTownLabels.hasLayer(marker)) otherTownLabels.removeLayer(marker);
+    }
+  });
+}
+
+// Legend
 const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
   const div = L.DomUtil.create('div', 'legend');
