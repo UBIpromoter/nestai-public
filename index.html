@@ -65,38 +65,43 @@
 const map = L.map('map', {
   zoomControl: true,
   attributionControl: true
-}).setView([42.58, -72.75], 11);
+}).setView([42.3, -72.0], 9);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+// Use no-labels tiles so our own labels are clean
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   maxZoom: 19
 }).addTo(map);
 
 // Colors
-const MOHAWK_COLOR = '#2563eb';    // blue
-const FRONTIER_COLOR = '#dc2626';  // red
+const MOHAWK_COLOR = '#2563eb';
+const FRONTIER_COLOR = '#dc2626';
 const MOHAWK_FILL = '#3b82f6';
 const FRONTIER_FILL = '#ef4444';
+
+// District town names for identification
+const districtTowns = new Set([
+  'Ashfield', 'Buckland', 'Charlemont', 'Colrain', 'Hawley', 'Heath', 'Plainfield', 'Shelburne',
+  'Conway', 'Deerfield', 'Sunderland', 'Whately'
+]);
 
 // High school locations
 const schools = [
   {
     name: 'Mohawk Trail Regional School',
-    lat: 42.6012,
-    lng: -72.7396,
+    lat: 42.6012, lng: -72.7396,
     district: 'Mohawk Trail',
     address: '26 Ashfield Rd, Shelburne Falls'
   },
   {
     name: 'Frontier Regional School',
-    lat: 42.4773,
-    lng: -72.6075,
+    lat: 42.4773, lng: -72.6075,
     district: 'Frontier Regional',
     address: '113 North Main St, South Deerfield'
   }
 ];
 
-// Town label positions (approximate centroids)
+// District town label positions
 const townCentroids = {
   'ASHFIELD': [42.528, -72.788],
   'BUCKLAND': [42.593, -72.790],
@@ -112,55 +117,70 @@ const townCentroids = {
   'WHATELY': [42.440, -72.640]
 };
 
-// Load GeoJSON
-fetch('districts.geojson')
-  .then(r => r.json())
-  .then(data => {
-    const geojsonLayer = L.geoJSON(data, {
-      style: feature => {
-        const isMohawk = feature.properties.district === 'mohawk';
-        return {
-          fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
-          fillOpacity: 0.35,
-          color: isMohawk ? MOHAWK_COLOR : FRONTIER_COLOR,
-          weight: 2.5,
-          opacity: 0.9
-        };
-      },
-      onEachFeature: (feature, layer) => {
-        const name = feature.properties.census_name;
-        const district = feature.properties.district === 'mohawk' ? 'Mohawk Trail' : 'Frontier Regional';
-        layer.bindPopup(`<strong>${name}</strong><br>${district} School District`);
-      }
-    }).addTo(map);
+// Load all data
+Promise.all([
+  fetch('districts.geojson').then(r => r.json()),
+  fetch('ma-towns.geojson').then(r => r.json()),
+  fetch('ma-mask.geojson').then(r => r.json())
+]).then(([districts, maTowns, maMask]) => {
 
-    // Add town name labels
-    data.features.forEach(feature => {
-      const name = feature.properties.massgis_name;
-      const displayName = feature.properties.census_name;
-      const centroid = townCentroids[name];
-      if (centroid) {
-        L.marker(centroid, {
-          icon: L.divIcon({
-            className: 'town-label',
-            html: displayName,
-            iconSize: null
-          })
-        }).addTo(map);
-      }
-    });
+  // 1. White mask hides everything outside Massachusetts
+  L.geoJSON(maMask, {
+    style: { fillColor: '#ffffff', fillOpacity: 1, color: '#555', weight: 2.5, opacity: 0.9 }
+  }).addTo(map);
 
-    // Fit bounds with padding for title bar
-    map.fitBounds(geojsonLayer.getBounds().pad(0.1));
-    // Offset for title bar
-    map.panBy([0, -30]);
+  // 2. All MA town boundaries — light gray outlines, no fill for district towns
+  L.geoJSON(maTowns, {
+    style: feature => {
+      const name = feature.properties.NAME || '';
+      if (districtTowns.has(name)) {
+        // Don't fill district towns here — they get colored below
+        return { fillColor: 'transparent', fillOpacity: 0, color: '#ccc', weight: 0.6 };
+      }
+      return { fillColor: '#f0f0f0', fillOpacity: 0.5, color: '#ccc', weight: 0.6 };
+    }
+  }).addTo(map);
+
+  // 3. District town polygons — colored, on top
+  const districtLayer = L.geoJSON(districts, {
+    style: feature => {
+      const isMohawk = feature.properties.district === 'mohawk';
+      return {
+        fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
+        fillOpacity: 0.35,
+        color: isMohawk ? MOHAWK_COLOR : FRONTIER_COLOR,
+        weight: 2.5,
+        opacity: 0.9
+      };
+    },
+    onEachFeature: (feature, layer) => {
+      const name = feature.properties.census_name;
+      const district = feature.properties.district === 'mohawk' ? 'Mohawk Trail' : 'Frontier Regional';
+      layer.bindPopup(`<strong>${name}</strong><br>${district} School District`);
+    }
+  }).addTo(map);
+
+  // 4. Town name labels for the 12 district towns
+  districts.features.forEach(feature => {
+    const name = feature.properties.massgis_name;
+    const displayName = feature.properties.census_name;
+    const centroid = townCentroids[name];
+    if (centroid) {
+      L.marker(centroid, {
+        icon: L.divIcon({ className: 'town-label', html: displayName, iconSize: null })
+      }).addTo(map);
+    }
   });
 
-// Add school pins
+  // Fit to districts with some padding
+  map.fitBounds(districtLayer.getBounds().pad(0.15));
+  map.panBy([0, -30]);
+});
+
+// School pins
 schools.forEach(school => {
   const color = school.district === 'Mohawk Trail' ? MOHAWK_COLOR : FRONTIER_COLOR;
 
-  // Custom pin icon
   const pinIcon = L.divIcon({
     className: '',
     html: `<div style="position:relative;">
@@ -177,7 +197,6 @@ schools.forEach(school => {
   const marker = L.marker([school.lat, school.lng], { icon: pinIcon }).addTo(map);
   marker.bindPopup(`<strong>${school.name}</strong><br>${school.address}`);
 
-  // Label
   L.marker([school.lat, school.lng], {
     icon: L.divIcon({
       className: 'school-label',
