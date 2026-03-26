@@ -7,16 +7,17 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #333; }
-  #map { width: 100%; height: 100vh; background: #fff; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; }
+  #map { width: 100%; height: 100vh; }
   .legend {
-    background: #fff;
+    background: rgba(255,255,255,0.95);
     padding: 12px 16px;
     border: 1.5px solid #999;
     border-radius: 4px;
     font-size: 13px;
     line-height: 2;
     color: #333;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   }
   .legend h4 { margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #111; }
   .legend-item { display: flex; align-items: center; gap: 8px; }
@@ -26,15 +27,14 @@
   }
   .town-label {
     background: none; border: none; box-shadow: none;
-    font-size: 11px; font-weight: 600; color: #444;
+    font-weight: 600; color: #333;
     white-space: nowrap;
-    letter-spacing: 0.3px;
+    text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 1px -1px 2px #fff, -1px 1px 2px #fff;
   }
-  .leaflet-container { background: #fff !important; }
   @media print {
-    body, #map, .leaflet-container { background: #fff !important; }
     .leaflet-control-zoom, .leaflet-control-attribution { display: none !important; }
     #map { height: 100vh; page-break-inside: avoid; }
+    .legend { box-shadow: none; border: 1px solid #999; }
   }
 </style>
 </head>
@@ -43,14 +43,19 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const map = L.map('map', {
-  zoomControl: false,
   attributionControl: false
 }).setView([42.56, -72.73], 11);
 
-const MOHAWK_FILL = '#b0c4de';
-const MOHAWK_BORDER = '#4a6fa5';
-const FRONTIER_FILL = '#f4a6a0';
-const FRONTIER_BORDER = '#c0504d';
+// Clean light base map - roads and terrain for context, no labels from tiles
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  maxZoom: 15,
+  minZoom: 9
+}).addTo(map);
+
+const MOHAWK_FILL = '#5b8db8';
+const MOHAWK_BORDER = '#2c5f8a';
+const FRONTIER_FILL = '#d97b73';
+const FRONTIER_BORDER = '#a8504a';
 
 const schools = [
   { lat: 42.6012, lng: -72.7396, district: 'mohawk' },
@@ -72,6 +77,30 @@ const townCentroids = {
   'WHATELY': [42.440, -72.640]
 };
 
+let labelLayer = L.layerGroup().addTo(map);
+
+function updateLabels() {
+  const zoom = map.getZoom();
+  labelLayer.clearLayers();
+  let fontSize;
+  if (zoom <= 10) fontSize = 10;
+  else if (zoom <= 11) fontSize = 12;
+  else if (zoom <= 12) fontSize = 14;
+  else fontSize = 16;
+
+  Object.entries(townCentroids).forEach(([key, coords]) => {
+    const displayName = key.charAt(0) + key.slice(1).toLowerCase();
+    L.marker(coords, {
+      icon: L.divIcon({
+        className: 'town-label',
+        html: '<span style="font-size:' + fontSize + 'px">' + displayName + '</span>',
+        iconSize: null
+      }),
+      interactive: false
+    }).addTo(labelLayer);
+  });
+}
+
 fetch('districts.geojson')
   .then(r => r.json())
   .then(data => {
@@ -80,41 +109,28 @@ fetch('districts.geojson')
         const isMohawk = feature.properties.district === 'mohawk';
         return {
           fillColor: isMohawk ? MOHAWK_FILL : FRONTIER_FILL,
-          fillOpacity: 0.6,
+          fillOpacity: 0.45,
           color: isMohawk ? MOHAWK_BORDER : FRONTIER_BORDER,
-          weight: 2,
+          weight: 2.5,
           opacity: 1
         };
       }
     }).addTo(map);
 
-    data.features.forEach(feature => {
-      const name = feature.properties.massgis_name;
-      const displayName = feature.properties.census_name;
-      const centroid = townCentroids[name];
-      if (centroid) {
-        L.marker(centroid, {
-          icon: L.divIcon({
-            className: 'town-label',
-            html: displayName,
-            iconSize: null
-          }),
-          interactive: false
-        }).addTo(map);
-      }
-    });
-
-    map.fitBounds(geojsonLayer.getBounds().pad(0.05));
+    map.fitBounds(geojsonLayer.getBounds().pad(0.08));
+    updateLabels();
   });
+
+map.on('zoomend', updateLabels);
 
 schools.forEach(school => {
   const color = school.district === 'mohawk' ? MOHAWK_BORDER : FRONTIER_BORDER;
   L.circleMarker([school.lat, school.lng], {
-    radius: 7,
+    radius: 8,
     fillColor: color,
     fillOpacity: 1,
     color: '#fff',
-    weight: 2.5
+    weight: 3
   }).addTo(map);
 });
 
@@ -122,10 +138,10 @@ const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function() {
   const div = L.DomUtil.create('div', 'legend');
   div.innerHTML = '<h4>School Districts</h4>' +
-    '<div class="legend-item"><div class="legend-swatch" style="background:#b0c4de; border-color:#4a6fa5;"></div><span>Mohawk Trail Regional</span></div>' +
-    '<div class="legend-item"><div class="legend-swatch" style="background:#f4a6a0; border-color:#c0504d;"></div><span>Frontier Regional</span></div>' +
+    '<div class="legend-item"><div class="legend-swatch" style="background:' + MOHAWK_FILL + '; border-color:' + MOHAWK_BORDER + ';"></div><span>Mohawk Trail Regional</span></div>' +
+    '<div class="legend-item"><div class="legend-swatch" style="background:' + FRONTIER_FILL + '; border-color:' + FRONTIER_BORDER + ';"></div><span>Frontier Regional</span></div>' +
     '<div style="margin-top:6px; font-size:11px; color:#666;">' +
-    '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#4a6fa5; border:2px solid #fff; vertical-align:middle; margin-right:4px;"></span> High School</div>';
+    '<span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:' + MOHAWK_BORDER + '; border:2.5px solid #fff; vertical-align:middle; margin-right:4px; box-shadow:0 0 2px rgba(0,0,0,0.3);"></span> High School</div>';
   return div;
 };
 legend.addTo(map);
